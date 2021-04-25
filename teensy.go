@@ -1,22 +1,19 @@
-package main
+package wallycli
 
 import (
 	"fmt"
 	"github.com/google/gousb"
 	"github.com/marcinbor85/gohex"
-	"log"
 	"os"
 	"time"
 )
 
 // TeensyFlash: Flashes Teensy boards.
 // It opens the firmware file at the provided path, checks it's integrity, wait for the keyboard to be in Flash mode, flashes it and reboots the board.
-func teensyFlash(firmwarePath string, s *state) {
+func teensyFlash(firmwarePath string, s *FlashState) error {
 	file, err := os.Open(firmwarePath)
 	if err != nil {
-		message := fmt.Sprintf("Error while opening firmware: %s", err)
-		log.Fatal(message)
-		return
+		return fmt.Errorf("error while opening firmware: %s", err)
 	}
 	defer file.Close()
 
@@ -25,9 +22,7 @@ func teensyFlash(firmwarePath string, s *state) {
 	firmware := gohex.NewMemory()
 	err = firmware.ParseIntelHex(file)
 	if err != nil {
-		message := fmt.Sprintf("Error while parsing firmware: %s", err)
-		log.Fatal(message)
-		return
+		return fmt.Errorf("error while parsing firmware: %s", err)
 	}
 
 	ctx := gousb.NewContext()
@@ -64,12 +59,10 @@ func teensyFlash(firmwarePath string, s *state) {
 	cfg, err := dev.Config(1)
 	defer cfg.Close()
 	if err != nil {
-		message := fmt.Sprintf("Error while claiming the usb interface: %s", err)
-		log.Fatal(message)
-		return
+		return fmt.Errorf("error while claiming the usb interface: %s", err)
 	}
 
-	s.step = 1
+	s.step = InProgress
 
 	// Loop on the firmware data and program
 	var addr uint32
@@ -92,9 +85,7 @@ func teensyFlash(firmwarePath string, s *state) {
 
 		bytes, err := dev.Control(0x21, 9, 0x0200, 0, buf)
 		if err != nil {
-			message := fmt.Sprintf("Error while sending firmware bytes: %s", err)
-			log.Fatal(message)
-			return
+			return fmt.Errorf("error while sending firmware bytes: %s", err)
 		}
 
 		s.sent += bytes
@@ -107,9 +98,8 @@ func teensyFlash(firmwarePath string, s *state) {
 	_, err = dev.Control(0x21, 9, 0x0200, 0, buf)
 
 	if err != nil {
-		message := fmt.Sprintf("Error while rebooting device: %s", err)
-		log.Fatal(message)
-		return
+		return fmt.Errorf("error while rebooting device: %s", err)
 	}
-	s.step = 2
+	s.step = Finished
+	return nil
 }
