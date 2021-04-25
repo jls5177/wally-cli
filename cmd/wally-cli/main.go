@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	wallycli "github.com/zsa/wally-cli"
+	wallycli "github.com/jls5177/wally-cli"
 	"log"
 	"net/url"
 	"os"

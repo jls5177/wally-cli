@@ -1,4 +1,4 @@
-module github.com/zsa/wally-cli
+module github.com/jls5177/wally-cli
 
 go 1.14
 
