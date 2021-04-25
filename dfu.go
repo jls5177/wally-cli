@@ -1,11 +1,10 @@
-package main
+package wallycli
 
 import (
 	"errors"
 	"fmt"
 	"github.com/google/gousb"
 	"io/ioutil"
-	"log"
 	"time"
 )
 
@@ -111,20 +110,16 @@ func extractSuffix(fileData []byte) (hasSuffix bool, data []byte, err error) {
 	return false, fileData, nil
 }
 
-func dfuFlash(firmwarePath string, s *state) {
+func dfuFlash(firmwarePath string, s *FlashState) error {
 	dfuStatus := status{}
 	fileData, err := ioutil.ReadFile(firmwarePath)
 	if err != nil {
-		message := fmt.Sprintf("Error while opening firmware: %s", err)
-		log.Fatal(message)
-		return
+		return fmt.Errorf("error while opening firmware: %s", err)
 	}
 
 	_, firmwareData, err := extractSuffix(fileData)
 	if err != nil {
-		message := fmt.Sprintf("Error while extracting DFU Suffix: %s", err)
-		log.Fatal(message)
-		return
+		return fmt.Errorf("error while extracting DFU Suffix: %s", err)
 	}
 
 	ctx := gousb.NewContext()
@@ -160,8 +155,7 @@ func dfuFlash(firmwarePath string, s *state) {
 
 	cfg, err := dev.Config(1)
 	if err != nil {
-		message := fmt.Sprintf("Error while claiming the usb interface: %s", err)
-		log.Fatal(message)
+		return fmt.Errorf("error while claiming the usb interface: %s", err)
 	}
 	defer cfg.Close()
 
@@ -170,17 +164,14 @@ func dfuFlash(firmwarePath string, s *state) {
 
 	err = dfuClearStatus(dev)
 	if err != nil {
-		message := fmt.Sprintf("Error while clearing the device status: %s", err)
-		log.Fatal(message)
+		return fmt.Errorf("error while clearing the device status: %s", err)
 	}
 
-	s.step = 1
+	s.step = InProgress
 
 	err = dfuCommand(dev, 0, eraseFlash, &dfuStatus)
 	if err != nil {
-		message := fmt.Sprintf("Error while erasing flash: %s", err)
-		log.Fatal(message)
-		return
+		return fmt.Errorf("error while erasing flash: %s", err)
 	}
 
 	for page := 0; page < fileSize; page += planckBlockSize {
@@ -193,21 +184,18 @@ func dfuFlash(firmwarePath string, s *state) {
 
 		err = dfuCommand(dev, addr, eraseAddress, &dfuStatus)
 		if err != nil {
-			message := fmt.Sprintf("Error while sending the erase address command: %s", err)
-			log.Fatal(message)
+			return fmt.Errorf("error while sending the erase address command: %s", err)
 		}
 		err = dfuCommand(dev, addr, setAddress, &dfuStatus)
 		if err != nil {
-			message := fmt.Sprintf("Error while sending the set address command: %s", err)
-			log.Fatal(message)
+			return fmt.Errorf("error while sending the set address command: %s", err)
 		}
 
 		buf := firmwareData[page : page+chunckSize]
 		bytes, err := dev.Control(33, 1, 2, 0, buf)
 
 		if err != nil {
-			message := fmt.Sprintf("Error while sending firmware bytes: %s", err)
-			log.Fatal(message)
+			return fmt.Errorf("error while sending firmware bytes: %s", err)
 		}
 
 		s.sent += bytes
@@ -215,10 +203,9 @@ func dfuFlash(firmwarePath string, s *state) {
 
 	err = dfuReboot(dev, &dfuStatus)
 	if err != nil {
-		message := fmt.Sprintf("Error while rebooting device: %s", err)
-		log.Fatal(message)
-		return
+		return fmt.Errorf("error while rebooting device: %s", err)
 	}
 
-	s.step = 2
+	s.step = Finished
+	return nil
 }

@@ -1,4 +1,4 @@
-package main
+package wallycli
 
 type device struct {
 	model int // 0 - planck // 1 - ergodox // 2 - moonlander

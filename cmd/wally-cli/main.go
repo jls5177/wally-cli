@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	wallycli "github.com/zsa/wally-cli"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -13,12 +15,6 @@ import (
 )
 
 var appVersion = "2.0.0"
-
-type state struct {
-	step  int
-	total int
-	sent  int
-}
 
 func main() {
 	flag.Usage = func() {
@@ -61,6 +57,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	var boardType wallycli.BoardType
+	switch extension {
+	case ".bin":
+		boardType = wallycli.DfuBoard
+	case ".hex":
+		boardType = wallycli.TeensyBoard
+	}
+
+	b, err := wallycli.New(boardType)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := b.FlashAsync(path); err != nil {
+		log.Fatal(err)
+	}
+
 	spinner := spin.New("%s Press the reset button of your keyboard.")
 	spinner.Start()
 	spinnerStopped := false
@@ -68,28 +81,27 @@ func main() {
 	var progress *pb.ProgressBar
 	progressStarted := false
 
-	s := state{step: 0, total: 0, sent: 0}
-	if extension == ".bin" {
-		go dfuFlash(path, &s)
-	}
-	if extension == ".hex" {
-		go teensyFlash(path, &s)
-	}
-
-	for s.step != 2 {
+	for !b.Finished() {
 		time.Sleep(500 * time.Millisecond)
-		if s.step > 0 {
+		if b.Running() {
 			if spinnerStopped == false {
 				spinner.Stop()
 				spinnerStopped = true
 			}
 			if progressStarted == false {
 				progressStarted = true
-				progress = pb.StartNew(s.total)
+				progress = pb.StartNew(b.TotalSteps())
 			}
-			progress.Set(s.sent)
+			progress.Set(b.CompletedSteps())
 		}
 	}
-	progress.Finish()
+	if progressStarted {
+		progress.Finish()
+	}
+
+	if b.FlashError() != nil {
+		log.Fatal(b.FlashError())
+	}
+
 	fmt.Println("Your keyboard was successfully flashed and rebooted. Enjoy the new firmware!")
 }

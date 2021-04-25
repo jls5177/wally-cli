@@ -36,5 +36,5 @@ brew install libusb
 ### build
 
 ```
-go build
+go build ./cmd/wally-cli
 ```
